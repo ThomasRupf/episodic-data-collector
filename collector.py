@@ -78,28 +78,42 @@ class IdCollector:
 class EpCollector:
     def __init__(self, *args, **kwargs):
         self._collector = IdCollector(*args, **kwargs)
-
-        self._cur_ep = None
+        self.flush = lambda self: self._collector.flush()
+        self.close = lambda self: self._collector.close()
+        self._cur_ep = 0
 
     def reset(self):
-        self._cur_ep = self._cur_ep + 1 if self._cur_ep is not None else 0
+        self._cur_ep = self._cur_ep + 1
 
     def add(self, key: str, data: np.ndarray):
-        if self._cur_ep is None:
-            self._cur_ep = 0
         self._collector.add(key, np.array([self._cur_ep]), data[np.newaxis, ...])
 
     def add_attr(self, full_key: str, key: str, value):
-        if self._cur_ep is None:
-            self._cur_ep = 0
         full_key = str(self._cur_ep) + "/" + full_key
         self._collector.add_attr(full_key, key, value)
 
-    def flush(self):
-        self._collector.flush()
 
-    def close(self):
-        self._collector.close()
+class BatchedEpCollector:
+    def __init__(self, batch_size: int, *args, **kwargs):
+        self._collector = IdCollector(*args, **kwargs)
+        self.flush = lambda self: self._collector.flush()
+        self.close = lambda self: self._collector.close()
+        self._batch_size = batch_size
+        self._ids = np.arange(batch_size)
 
-    def __del__(self):
-        self.close()
+    def reset(self, ids: np.ndarray):
+        max_id = ids.max()
+        n = self._ids[ids].shape[0]
+        self._ids[ids] = np.arange(max_id + 1, max_id + 1 + len(n))
+
+    def add(self, key: str, data: np.ndarray):
+        if data.shape[0] != self._batch_size:
+            raise ValueError("`data.shape[0]` must be equal to `batch_size`")
+        self._collector.add(key, self._ids.copy(), data)
+
+    def add_attr(self, full_key: str, key: str, value: np.ndarray):
+        if value.shape[0] != self._batch_size:
+            raise ValueError("`value.shape[0]` must be equal to `batch_size`")
+        for i, v in zip(self._ids, value):
+            full_key = str(i) + "/" + full_key
+            self._collector.add_attr(full_key, key, v)
