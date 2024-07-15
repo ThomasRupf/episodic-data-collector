@@ -31,12 +31,7 @@ class IdCollector:
         self._cache = []
         self._attr_cache = []
 
-    def add(self, key: str, id: np.ndarray, data: np.ndarray | dict[str, np.ndarray]):
-        if isinstance(data, dict):
-            for k, v in data.items():
-                self.add(key + "/" + k, id.copy(), v)
-            return
-
+    def add(self, key: str, id: np.ndarray, data: np.ndarray):
         self._ram += id.nbytes + data.nbytes
         self._cache.append((key, id, data))
 
@@ -101,6 +96,8 @@ class EpCollector:
             for k, v in data.items():
                 self.add(key + "/" + k, v)
             return
+        if not isinstance(data, np.ndarray):
+            data = np.array(data)
         self._collector.add(key, np.array([self._cur_ep]), data[np.newaxis, ...])
 
     def add_attr(self, key: str, attr_name: str, value):
@@ -128,6 +125,10 @@ class BatchedEpCollector:
         self._ids[ids] = np.arange(max_id + 1, max_id + 1 + n)
 
     def add(self, key: str, data: np.ndarray | dict[str, np.ndarray]):
+        if isinstance(data, dict):
+            for k, v in data.items():
+                self.add(key + "/" + k, v)
+            return
         if data.shape[0] != self._batch_size:
             raise ValueError("`data.shape[0]` must be equal to `batch_size`")
         self._collector.add(key, self._ids.copy(), data)
@@ -143,3 +144,22 @@ class BatchedEpCollector:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+
+class Collector:
+    def __init__(self, path: str, COL, STORE, **kwargs):
+        self._store: zarr.storage.Store = STORE(path)
+        self._collector = COL(store=self._store, **kwargs)
+        self.flush = self._collector.flush
+        self.close = self._collector.close
+        self.add = self._collector.add
+        self.add_attr = self._collector.add_attr
+        self.reset = self._collector.reset
+
+    def __enter__(self):
+        self._collector.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._collector.__exit__(exc_type, exc_val, exc_tb)
+        self._store.close()
