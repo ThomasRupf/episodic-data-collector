@@ -74,12 +74,18 @@ class IdCollector:
     def __del__(self):
         self.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
 
 class EpCollector:
     def __init__(self, *args, **kwargs):
         self._collector = IdCollector(*args, **kwargs)
-        self.flush = lambda self: self._collector.flush()
-        self.close = lambda self: self._collector.close()
+        self.flush = self._collector.flush
+        self.close = self._collector.close
         self._cur_ep = 0
 
     def reset(self):
@@ -92,17 +98,23 @@ class EpCollector:
         full_key = str(self._cur_ep) + "/" + full_key
         self._collector.add_attr(full_key, key, value)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
 
 class BatchedEpCollector:
     def __init__(self, batch_size: int, *args, **kwargs):
         self._collector = IdCollector(*args, **kwargs)
-        self.flush = lambda self: self._collector.flush()
-        self.close = lambda self: self._collector.close()
+        self.flush = self._collector.flush
+        self.close = self._collector.close
         self._batch_size = batch_size
         self._ids = np.arange(batch_size)
 
     def reset(self, ids: np.ndarray):
-        max_id = ids.max()
+        max_id = self._ids.max()
         n = self._ids[ids].shape[0]
         self._ids[ids] = np.arange(max_id + 1, max_id + 1 + len(n))
 
@@ -117,3 +129,9 @@ class BatchedEpCollector:
         for i, v in zip(self._ids, value):
             full_key = str(i) + "/" + full_key
             self._collector.add_attr(full_key, key, v)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
