@@ -175,3 +175,12 @@ def collect(path, COL, STORE, **kwargs):
             yield col
     finally:
         store.close()
+
+
+def zarr_to_dict(path: str) -> dict[str, np.ndarray]:
+    def rec(g: zarr.Group | zarr.Array):
+        if isinstance(g, zarr.Array):
+            return g[:]
+        return {k: rec(v) for k, v in g.items()}
+
+    return rec(zarr.open(path))
