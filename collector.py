@@ -86,10 +86,10 @@ class EpCollector:
         self._collector = IdCollector(*args, **kwargs)
         self.flush = self._collector.flush
         self.close = self._collector.close
-        self._cur_ep = 0
+        self._cur_ep = None
 
     def reset(self):
-        self._cur_ep = self._cur_ep + 1
+        self._cur_ep = self._cur_ep + 1 if self._cur_ep is not None else 0
 
     def add(self, data: dict[str, np.ndarray]):
         for k, v in data.items():
@@ -102,6 +102,8 @@ class EpCollector:
             return
         if not isinstance(data, np.ndarray):
             data = np.array(data)
+        if self._cur_ep is None:
+            self.reset()  # in case user does not call `reset` first
         self._collector.add(key, np.array([self._cur_ep]), data[np.newaxis, ...])
 
     def add_attr(self, key: str, attr_name: str, value):
@@ -121,9 +123,15 @@ class BatchedEpCollector:
         self.flush = self._collector.flush
         self.close = self._collector.close
         self._batch_size = batch_size
-        self._ids = np.arange(batch_size)
+        self._ids = None
 
-    def reset(self, ids: np.ndarray):
+    def reset(self, ids: np.ndarray | None = None):
+        if self._ids is None:
+            if ids is not None:
+                raise ValueError("ids must be None on first reset")
+            self._ids = np.arange(self._batch_size)
+        if ids is None:
+            ids = np.arange(self._batch_size)
         max_id = self._ids.max()
         n = self._ids[ids].shape[0]
         self._ids[ids] = np.arange(max_id + 1, max_id + 1 + n)
@@ -139,6 +147,8 @@ class BatchedEpCollector:
             return
         if data.shape[0] != self._batch_size:
             raise ValueError("`data.shape[0]` must be equal to `batch_size`")
+        if self._ids is None:
+            self.reset()  # in case user does not call `reset` first
         self._collector.add(key, self._ids.copy(), data)
 
     def add_attr(self, key: str, attr_name: str, value: np.ndarray):
