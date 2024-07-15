@@ -31,7 +31,12 @@ class IdCollector:
         self._cache = []
         self._attr_cache = []
 
-    def add(self, key: str, id: np.ndarray, data: np.ndarray):
+    def add(self, key: str, id: np.ndarray, data: np.ndarray | dict[str, np.ndarray]):
+        if isinstance(data, dict):
+            for k, v in data.items():
+                self.add(key + "/" + k, id.copy(), v)
+            return
+
         self._ram += id.nbytes + data.nbytes
         self._cache.append((key, id, data))
 
@@ -91,7 +96,11 @@ class EpCollector:
     def reset(self):
         self._cur_ep = self._cur_ep + 1
 
-    def add(self, key: str, data: np.ndarray):
+    def add(self, key: str, data: np.ndarray | dict[str, np.ndarray]):
+        if isinstance(data, dict):
+            for k, v in data.items():
+                self.add(key + "/" + k, v)
+            return
         self._collector.add(key, np.array([self._cur_ep]), data[np.newaxis, ...])
 
     def add_attr(self, key: str, attr_name: str, value):
@@ -118,7 +127,7 @@ class BatchedEpCollector:
         n = self._ids[ids].shape[0]
         self._ids[ids] = np.arange(max_id + 1, max_id + 1 + n)
 
-    def add(self, key: str, data: np.ndarray):
+    def add(self, key: str, data: np.ndarray | dict[str, np.ndarray]):
         if data.shape[0] != self._batch_size:
             raise ValueError("`data.shape[0]` must be equal to `batch_size`")
         self._collector.add(key, self._ids.copy(), data)
