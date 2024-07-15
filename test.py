@@ -33,9 +33,9 @@ def test_ep_collector():
         collector = EpCollector(store, max_ram="1MB")
 
         # Add data of various shapes and dtypes
-        collector.add("data1", np.array([10, 20, 30]))
+        collector.add({"data1": np.array([10, 20, 30])})
         collector.reset()
-        collector.add("data2", np.array([1.1, 2.2, 3.3]))
+        collector.add({"data2": np.array([1.1, 2.2, 3.3])})
         collector.add_attr("data2", "attr1", "value1")
         collector.flush()
 
@@ -52,9 +52,9 @@ def test_batched_ep_collector():
         collector = BatchedEpCollector(3, store, max_ram="1MB")
 
         # Add data of various shapes and dtypes
-        collector.add("data1", np.array([[1, 2], [3, 4], [5, 6]]))
+        collector.add({"data1": np.array([[1, 2], [3, 4], [5, 6]])})
         collector.reset(np.array([0, 2]))
-        collector.add("data2", np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]]))
+        collector.add({"data2": np.array([[1.1, 2.2], [3.3, 4.4], [5.5, 6.6]])})
         collector.add_attr("data2", "attr1", np.array(["value1", "value2", "value3"]))
         collector.flush()
 

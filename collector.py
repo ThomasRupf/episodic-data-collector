@@ -132,6 +132,7 @@ class BatchedEpCollector:
             if ids is not None:
                 raise ValueError("ids must be None on first reset")
             self._ids = np.arange(self._batch_size)
+            return
         if ids is None:
             ids = np.arange(self._batch_size)
         max_id = self._ids.max()
