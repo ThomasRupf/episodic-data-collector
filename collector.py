@@ -91,10 +91,14 @@ class EpCollector:
     def reset(self):
         self._cur_ep = self._cur_ep + 1
 
-    def add(self, key: str, data: np.ndarray | dict[str, np.ndarray]):
+    def add(self, data: dict[str, np.ndarray]):
+        for k, v in data.items():
+            self._add(k, v)
+
+    def _add(self, key: str, data: np.ndarray | dict[str, np.ndarray]):
         if isinstance(data, dict):
             for k, v in data.items():
-                self.add(key + "/" + k, v)
+                self._add(key + "/" + k, v)
             return
         if not isinstance(data, np.ndarray):
             data = np.array(data)
@@ -124,7 +128,11 @@ class BatchedEpCollector:
         n = self._ids[ids].shape[0]
         self._ids[ids] = np.arange(max_id + 1, max_id + 1 + n)
 
-    def add(self, key: str, data: np.ndarray | dict[str, np.ndarray]):
+    def add(self, data: dict[str, np.ndarray]):
+        for k, v in data.items():
+            self._add(k, v)
+
+    def _add(self, key: str, data: np.ndarray | dict[str, np.ndarray]):
         if isinstance(data, dict):
             for k, v in data.items():
                 self.add(key + "/" + k, v)
