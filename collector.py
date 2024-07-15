@@ -38,8 +38,8 @@ class IdCollector:
         if self._ram > self._max_ram // 2:
             self.flush()
 
-    def add_attr(self, full_key: str, key: str, value):
-        self._attr_cache.append((full_key, key, value))
+    def add_attr(self, key: str, attr_name: str, value):
+        self._attr_cache.append((key, attr_name, value))
 
     def flush(self):
         self._ram = 0
@@ -47,7 +47,7 @@ class IdCollector:
         x: dict[int, dict[str, list[np.ndarray]]] = {}
         for key, id, data in self._cache:
             for i, d in zip(id, data):
-                x.setdefault(i, {}).setdefault(key, []).append(d)
+                x.setdefault(int(i), {}).setdefault(key, []).append(d)
         del self._cache
         self._cache = []
 
@@ -63,8 +63,8 @@ class IdCollector:
         del x
 
         # write attributes
-        for full_key, key, value in self._attr_cache:
-            self._root[full_key].attrs[key] = value
+        for key, attr_name, value in self._attr_cache:
+            self._root[key].attrs[attr_name] = value
         del self._attr_cache
         self._attr_cache = []
 
@@ -94,9 +94,9 @@ class EpCollector:
     def add(self, key: str, data: np.ndarray):
         self._collector.add(key, np.array([self._cur_ep]), data[np.newaxis, ...])
 
-    def add_attr(self, full_key: str, key: str, value):
-        full_key = str(self._cur_ep) + "/" + full_key
-        self._collector.add_attr(full_key, key, value)
+    def add_attr(self, key: str, attr_name: str, value):
+        key = str(self._cur_ep) + "/" + key
+        self._collector.add_attr(key, attr_name, value)
 
     def __enter__(self):
         return self
@@ -116,19 +116,18 @@ class BatchedEpCollector:
     def reset(self, ids: np.ndarray):
         max_id = self._ids.max()
         n = self._ids[ids].shape[0]
-        self._ids[ids] = np.arange(max_id + 1, max_id + 1 + len(n))
+        self._ids[ids] = np.arange(max_id + 1, max_id + 1 + n)
 
     def add(self, key: str, data: np.ndarray):
         if data.shape[0] != self._batch_size:
             raise ValueError("`data.shape[0]` must be equal to `batch_size`")
         self._collector.add(key, self._ids.copy(), data)
 
-    def add_attr(self, full_key: str, key: str, value: np.ndarray):
+    def add_attr(self, key: str, attr_name: str, value: np.ndarray):
         if value.shape[0] != self._batch_size:
             raise ValueError("`value.shape[0]` must be equal to `batch_size`")
         for i, v in zip(self._ids, value):
-            full_key = str(i) + "/" + full_key
-            self._collector.add_attr(full_key, key, v)
+            self._collector.add_attr(str(i) + "/" + key, attr_name, v)
 
     def __enter__(self):
         return self
