@@ -1,3 +1,5 @@
+import contextlib
+
 import numpy as np
 import zarr
 import zarr.storage
@@ -164,20 +166,11 @@ class BatchedEpCollector:
         self.close()
 
 
-class Collector:
-    def __init__(self, path: str, COL, STORE, **kwargs):
-        self._store: zarr.storage.Store = STORE(path)
-        self._collector = COL(store=self._store, **kwargs)
-        self.flush = self._collector.flush
-        self.close = self._collector.close
-        self.add = self._collector.add
-        self.add_attr = self._collector.add_attr
-        self.reset = self._collector.reset
-
-    def __enter__(self):
-        self._collector.__enter__()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._collector.__exit__(exc_type, exc_val, exc_tb)
-        self._store.close()
+@contextlib.contextmanager
+def collect(path, COL, STORE, **kwargs):
+    store: zarr.storage.Store = STORE(path)
+    try:
+        with COL(store, **kwargs) as col:
+            yield col
+    finally:
+        store.close()
