@@ -34,6 +34,9 @@ class IdCollector:
         self._attr_cache = []
 
     def add(self, key: str, id: np.ndarray, data: np.ndarray):
+        if data.dtype == object:
+            raise ValueError(f"`data.dtype` `object` currently not supported (key={key})")
+
         self._ram += id.nbytes + data.nbytes
         self._cache.append((key, id, data))
 
@@ -49,8 +52,13 @@ class IdCollector:
         x: dict[int, dict[str, list[np.ndarray]]] = {}
         for key, id, data in self._cache:
             for i, d in zip(id, data):
-                x.setdefault(int(i), {}).setdefault(key, []).append(d)
-        del self._cache
+                xil = x.setdefault(int(i), {}).setdefault(key, [])
+                xil.append(d)
+                if len(xil) > 1 and xil[-2].shape != d.shape:
+                    raise ValueError(
+                        f"Shape mismatch for key {i}/{key} at index {len(xil) - 1}"
+                        f" ({xil[-2].shape} != {d.shape})"
+                    )
         self._cache = []
 
         # write data
@@ -67,11 +75,11 @@ class IdCollector:
         # write attributes
         for key, attr_name, value in self._attr_cache:
             self._root[key].attrs[attr_name] = value
-        del self._attr_cache
         self._attr_cache = []
 
     def close(self):
         self.flush()
+        print("closed", self.__class__.__name__)
 
     def __del__(self):
         self.close()
@@ -113,10 +121,11 @@ class EpCollector:
         self._collector.add_attr(key, attr_name, value)
 
     def __enter__(self):
+        self._collector.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        self._collector.__exit__(exc_type, exc_val, exc_tb)
 
 
 class BatchedEpCollector:
@@ -161,10 +170,11 @@ class BatchedEpCollector:
             self._collector.add_attr(str(i) + "/" + key, attr_name, v)
 
     def __enter__(self):
+        self._collector.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        self._collector.__exit__(exc_type, exc_val, exc_tb)
 
 
 @contextlib.contextmanager
