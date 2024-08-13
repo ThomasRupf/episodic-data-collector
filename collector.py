@@ -26,6 +26,7 @@ class IdCollector:
         self._store = storage
         self._root = zarr.group(store=self._store, overwrite=True)
         self._max_ram = _parse_memspec(max_ram)
+        self._registered_dsets = dict()
         self._dset_kwargs = dset_kwargs
 
         # variable state
@@ -46,6 +47,12 @@ class IdCollector:
     def add_attr(self, key: str, attr_name: str, value):
         self._attr_cache.append((key, attr_name, value))
 
+    def register_key(self, key: str, strict: bool = True, **dset_kwargs):
+        if key in self._registered_dsets:
+            raise ValueError(f"Key {key} already registered")
+        dset_kwargs["strict"] = strict
+        self._registered_dsets[key] = dset_kwargs
+
     def flush(self):
         self._ram = 0
 
@@ -64,12 +71,28 @@ class IdCollector:
         # write data
         for i, dset in x.items():
             for key, data in dset.items():
-                data = np.stack(data)
-                key = str(i) + "/" + key
-                if key in self._root:
-                    self._root[key].append(data)
+                strict = True
+                dset_kwargs = self._dset_kwargs.copy()
+                if key in self._registered_dsets:
+                    strict = self._registered_dsets[key]["strict"]
+                    dset_kwargs.update(self._registered_dsets[key])
+                    del dset_kwargs["strict"]
+                if strict:
+                    try:
+                        data = np.stack(data)
+                    except ValueError as e:
+                        raise ValueError(f"Cannot stack data for `{i}/{key}`. Shape mismatch?") from e
+                    key = str(i) + "/" + key
+                    if key in self._root:
+                        self._root[key].append(data)
+                    else:
+                        self._root.create_dataset(key, data=data, **dset_kwargs)
                 else:
-                    self._root.create_dataset(key, data=data, **self._dset_kwargs)
+                    key = str(i) + "/" + key
+                    idx = 0 if key + "/0" not in self._root else len(self._root[key].keys())
+                    for j, d in enumerate(data):
+                        self._root.create_dataset(key + "/" + str(idx + j), data=d, **dset_kwargs)
+                    self._root[key].attrs["_leaf"] = True
         del x
 
         # write attributes
@@ -96,6 +119,7 @@ class EpCollector:
         self._collector = IdCollector(*args, **kwargs)
         self.flush = self._collector.flush
         self.close = self._collector.close
+        self.register_key = self._collector.register_key
         self._cur_ep = None
 
     def reset(self):
@@ -133,6 +157,7 @@ class BatchedEpCollector:
         self._collector = IdCollector(*args, **kwargs)
         self.flush = self._collector.flush
         self.close = self._collector.close
+        self.register_key = self._collector.register_key
         self._batch_size = batch_size
         self._ids = None
 
@@ -188,9 +213,12 @@ def collect(path, COL, STORE, **kwargs):
 
 
 def zarr_to_dict(path: str) -> dict[str, np.ndarray]:
+    # TODO: write general version for any zarr/hdf5 file
     def rec(g: zarr.Group | zarr.Array):
         if isinstance(g, zarr.Array):
             return g[:]
+        elif isinstance(g, zarr.Group) and g.attrs.get("_leaf", False):
+            return [g[i][:] for i in range(len(g.keys()))]
         return {k: rec(v) for k, v in g.items()}
 
     return rec(zarr.open(path))
