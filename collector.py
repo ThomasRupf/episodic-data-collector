@@ -59,13 +59,7 @@ class IdCollector:
         x: dict[int, dict[str, list[np.ndarray]]] = {}
         for key, id, data in self._cache:
             for i, d in zip(id, data):
-                xil = x.setdefault(int(i), {}).setdefault(key, [])
-                xil.append(d)
-                if len(xil) > 1 and xil[-2].shape != d.shape:
-                    raise ValueError(
-                        f"Shape mismatch for key {i}/{key} at index {len(xil) - 1}"
-                        f" ({xil[-2].shape} != {d.shape})"
-                    )
+                x.setdefault(int(i), {}).setdefault(key, []).append(d)
         self._cache = []
 
         # write data
